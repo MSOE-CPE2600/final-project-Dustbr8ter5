@@ -24,45 +24,45 @@ char *usernames[100];
 void handler(int signo, siginfo_t *info, void *context) {
     int good = 0;
     //Get vote from sender
-    voterinfo *voter = (voterinfo *) (info->si_value.sival_ptr)
+    voterinfo *voter = (voterinfo *) (info->si_value.sival_ptr);
     for (int j = 0; j < 100; j++) {
         if(strcmp(usernames[j], voter->username) == 0) {
+            printf("Username previously voted: vote discarded\n");
             break;
         }
     }
     //Add the username to the array
     for (int j = 0; j < 100; j++) {
         if(strcmp(usernames[j], "") == 0) {
-            usernames[j] == voter->username;
+            usernames[j] = voter->username;
             good = 1;
             break;
         }
     }
     if(good == 1) {
+        printf("Vote Processed");
         //Add the vote to the total depending on what it is
         switch (voter->answer) {
-            case 1 :
-                SN++;
+            case 1 : 
+                SN++; //Snickerdoodle (My vote)
                 break;
             case 2 :
-                CC++;
+                CC++; //Chocolate Chip
                 break;
             case 3 :
-                WCM++;
+                WCM++; //White Chocolate Chip Macadamia
                 break;
             case 4 :
-                SU++;
+                SU++; //Sugar
                 break;
             case 5 :
-                GB++;
+                GB++; //Gingerbread
                 break;
             case 6 :
-                PB++;
+                PB++; //Peanut Butter
                 break;
         }
     }
-
-    
 }
 
 void *getvotes(void *arg) {
@@ -74,24 +74,19 @@ void *getvotes(void *arg) {
     sa.sa_flags = SA_SIGINFO;
     //Register for signal
     sigaction(SIGUSR1, &sa, NULL);
-    printf("Awaiting Signal");
-    pause();
+    printf("Awaiting Signal...\n");
+    pause(); //Wait for signal
+    printf("Signal Received\n");
     return NULL;
 }
 int main(int argc, char *argv[]) { 
-    int votes = 0;
     char ans;
-    usernames = {""};
     pthread_t threads[NUM_THREADS];
     while(1) {
         //Get receiver operator input
         printf("Begin Receiving? 'y' = yes 'n' = quit\n");
         scanf("%c", &ans);
         if(ans != 'y') {
-            //Remove any still running threads
-            for(int i = 0; i < NUM_THREADS, i++) {
-                pthread_join(threads[i], NULL);
-            }
             //Print vote results
             printf("Vote Results:\n");
             printf("Snickerdoodle: %d votes\n", SN);
@@ -111,7 +106,7 @@ int main(int argc, char *argv[]) {
 
         }
         //Wait for threads
-        for(int i = 0; i < NUM_THREADS, i++) {
+        for(int i = 0; i < NUM_THREADS; i++) {
             pthread_join(threads[i], NULL);
         }
     }
