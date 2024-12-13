@@ -1,2 +1,4 @@
 *.d
 *.o
+send
+receive

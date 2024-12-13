@@ -3,59 +3,71 @@
 // File: send.c
 // Author: Vincent Vassallo
 // Section: 111
-// Instruction: Enter make and run on separate WSL/Ubuntu Terminal
-//              run receive first and put its pid in this program's command 
-//              arguments. 
-//              Entering "quit" as the username will exit the program, for
-//              convenience
 /*************************************************************************** */
-#include "send.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
-#include <pthread.h>
 #include <signal.h>
 #include <sys/wait.h>
-//Voting Machine?
-
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/types.h>
+//Combine vote and username in shared memory
 int main(int argc, char *argv[]) {
-    int receiver_id;
-    struct voterinfo voter;
 
-    //Getting the receivers id from the command line
-    receiver_id = atoi(argv[1]);
+    int receiver_id = atoi(argv[1]);
 
-    //Making sure the receiver exists
-    if(kill(receiver_id, 0) != 0) {
-        printf("Receiver id was not acquired or is incorrect\n");
+    // Making sure the receiver exists
+    if (kill(receiver_id, 0) != 0) {
+        perror("Receiver id was not acquired or is incorrect");
         printf("Connection cannot be made with receiver\n");
         printf("Please reset...\n");
         exit(1); 
     }
 
-    
-    //Get voter username and put into struct
-    char temp[20] = "";
-    int i = 0;
-    printf("Please enter only your voting username:\n");
-    while(i == 0) {
-        if(fgets(temp, 20, stdin) == NULL){
-            printf("Invalid username detected: Please reenter...\n");
-        } else {
-                i = 1;
-        }
-    }
-    //Check for quit
-    if(strcmp(temp, "quit") == 0) {
+    int shm_fd = shm_open("/my_shm", O_CREAT | O_RDWR, 0666);
+    if (shm_fd == -1) {
+        perror("shm_open");
         exit(1);
     }
-    //Add username to struct
-    voter.username = temp;
-    printf("User: %s may now begin voting\n", temp);
-    char temp2[2];
-    int vote;
-    //Display fun voting message
+
+    if (ftruncate(shm_fd, 1024) == -1) {
+        perror("ftruncate");
+        exit(1);
+    }
+
+    void *shm_ptr = mmap(0, 1024, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+    if (shm_ptr == MAP_FAILED) {
+        perror("mmap");
+        exit(1);
+    }
+
+    // Get voter username
+    char temp[100];
+    int i = 0;
+    printf("Please enter only your voting username:\n");
+    while (i == 0) {
+        if (fgets(temp, sizeof(temp), stdin) == NULL) {
+            printf("Invalid username detected: Please reenter...\n");
+        } else {
+            i = 1;
+        }
+    }
+    
+    // Remove newline character from fgets
+    temp[strcspn(temp, "\n")] = '\0';
+    char *username = temp;
+
+    // Check for quit
+    if (strcmp(username, "quit") == 0) {  
+        exit(1);
+    }
+
+    
+    printf("User: %s may now begin voting\n", username);
+    char temp2[20];
+    // Display fun voting message
     printf("|*************************************************|\n");
     printf("| For voting today there is a most pressing issue |\n");
     printf("|            What is the best cookie?             |\n");
@@ -65,23 +77,30 @@ int main(int argc, char *argv[]) {
     printf("|        5 - Gingerbread  6 - Peanut Butter       |\n");
     printf("|                7 - Cornbread                    |\n");
     printf("|*************************************************|\n");
-    //Get vote
+    // Get vote
     printf("Please enter the number of your vote: \n");
-    if(fgets(temp2, 2, stdin) == NULL) {
+    if (fgets(temp2, 2, stdin) == NULL) {
         printf("Invalid vote detected...\nLogging out voter\n");
     } 
-    //Test for cornbread
-    if(temp2[0] == '7') {
+    // Test for cornbread
+    if (temp2[0] == '7') {
         printf("Cornbread is not a cookie, it was only added to the ballot due to popular demand\n");
         printf("Logging out: Please consider resigning in and voting for a cookie\n");    
     } else {
-        vote = atoi(temp2);
         printf("Vote cast: sending to receiver...\n");
-        union sigval value;
-        voter.answer = vote; //Add vote to struct
-        value.sival_ptr = &voter; //Prepare the struct for sending
-        sigqueue(receiver_id, SIGUSR1, value); //Send the signal
+        strcat(temp2, username);
+        strcpy((char *)shm_ptr, temp2); // Write to shared memory
+        if (kill(receiver_id, SIGUSR1) == -1) {
+            perror("sigkill\n");
+            exit(1);
+        }
         printf("Vote sent: Thank you for your time!\n");
+        
     }
+    if (munmap(shm_ptr, 1024) == -1) {
+        perror("munmap");
+        exit(1);
+    }
+    close(shm_fd);
     return 0;
 }

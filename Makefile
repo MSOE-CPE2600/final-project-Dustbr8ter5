@@ -1,4 +1,4 @@
-CFLAGS=-c -g -Wall -Werror 
+CFLAGS=-c -g -Wall -Werror -lpthread
 CC=gcc
 
 all: send receive
